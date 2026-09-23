@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Makes the page scale properly on phones -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Happy 1 Year</title>
+ 
+  <!-- Optional web fonts from Google. Offline? The fallbacks listed in
+       --font-display and --font-body below take over automatically. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600&family=Young+Serif&display=swap" rel="stylesheet">
+ 
+  <style>
+    /* =====================================================================
+       1. DESIGN TOKENS
+       CSS variables ("custom properties") live on :root, which means the
+       whole page can read them with var(--name). Change a colour here and
+       it changes everywhere.
+       ===================================================================== */
+    :root {
+      --blush:        #f8e4e2;   /* page background */
+      --blush-deep:   #eec3c8;   /* locked tiles */
+      --blush-shadow: #e5aeb6;   /* stripes on locked tiles */
+      --berry:        #4b1232;   /* text and buttons */
+      --rose:         #c02a5e;   /* hover / focus accent */
+      --brass:        #86560f;   /* the padlock icon */
+      --soft:         #7a4560;   /* secondary text */
+ 
+      --font-display: "Young Serif", Georgia, "Times New Roman", serif;
+      --font-body:    "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+ 
+      /* --u is ONE column of the heart grid. Each tile is 2 columns wide.
+         min() picks the smaller value: 8.6% of the screen width on phones,
+         but never more than 62px on big screens. Making the heart bigger or
+         smaller = change this one number. */
+      --u: min(8.6vw, 62px);
+    }
+ 
+    /* Make width/height include padding and border. Saves headaches. */
+    *, *::before, *::after { box-sizing: border-box; }
+ 
+    /* IMPORTANT GOTCHA: the HTML `hidden` attribute is weak. If a class sets
+       `display:flex` (like .screen below), it beats `hidden` and the element
+       stays visible! This line makes `hidden` always win. */
+    [hidden] { display: none !important; }
+ 
+    body {
+      margin: 0;
+      background: var(--blush);
+      color: var(--berry);
+      font-family: var(--font-body);
+      font-size: 1.05rem;
+      line-height: 1.6;
+    }
+ 
+    h1, h2, h3 {
+      font-family: var(--font-display);
+      font-weight: 400;
+      line-height: 1.1;
+      margin: 0;
+    }
+ 
+    /* Visible keyboard focus (for people who tab around instead of clicking) */
+    :focus-visible { outline: 3px solid var(--rose); outline-offset: 3px; }
+ 
+    /* =====================================================================
+       2. SCREENS (home page and heart page)
+       Both are <section class="screen">. JavaScript flips the `hidden`
+       attribute to show one and hide the other.
+       ===================================================================== */
+    .screen {
+      min-height: 100vh;
+      max-width: 38rem;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;   /* vertical centring inside the flex column */
+    }
+    .screen.wide {
+      max-width: 48rem;
+      align-items: center;
+      text-align: center;
+    }
+ 
+    /* ---------- Home ---------- */
+    #home h1 { font-size: clamp(2.6rem, 9vw, 4.4rem); margin-bottom: 1.25rem; }
+    #home p  { max-width: 30rem; margin: 0 0 1rem; }
+ 
+    #code-form { margin-top: 1.5rem; }
+    #code-form label { display: block; font-weight: 600; margin-bottom: .25rem; }
+ 
+    #code-input {
+      display: block;
+      width: 100%;
+      max-width: 16rem;
+      padding: .25rem 0 .35rem;
+      border: 0;
+      border-bottom: 3px solid var(--berry);
+      background: transparent;
+      color: inherit;
+      font: 600 2rem var(--font-body);
+      letter-spacing: .45em;               /* spreads the digits apart */
+      font-variant-numeric: tabular-nums;  /* all digits same width */
+    }
+    #code-input:focus-visible { outline: none; border-bottom-color: var(--rose); }
+ 
+    .msg { min-height: 1.6em; margin: .75rem 0 0; color: var(--rose); font-weight: 600; }
+ 
+    /* ---------- Buttons ---------- */
+    .btn {
+      margin-top: 1.25rem;
+      padding: .7rem 1.6rem;
+      border: 0;
+      border-radius: 999px;
+      background: var(--berry);
+      color: var(--blush);
+      font: 600 1rem var(--font-body);
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .btn:hover { background: var(--rose); }
+ 
+    .link-btn {
+      border: 0;
+      background: none;
+      padding: .25rem 0;
+      color: var(--soft);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+ 
+    /* ---------- Heart page ---------- */
+    #heart-screen h2 { font-size: clamp(2rem, 6vw, 3rem); }
+    #progress { margin: .5rem 0 0; color: var(--soft); }
+ 
+    /* =====================================================================
+       3. THE HEART  (CSS Grid)
+       A grid is 10 columns wide. Every tile spans 2 columns, so tiles in the
+       next row can start on an ODD column and sit half a tile over. That
+       "brick" offset is what turns a block of squares into a heart shape.
+       JS places each tile with grid-column / grid-row (see PUZZLES below).
+       ===================================================================== */
+    .heart {
+      display: grid;
+      grid-template-columns: repeat(10, var(--u));   /* 10 columns, each --u wide */
+      grid-auto-rows: calc(var(--u) * 2);            /* row height = tile width -> squares */
+      margin: 2rem auto 1rem;
+    }
+    /* Tiny heartbeat when all 12 are unlocked */
+    .heart.complete { animation: beat 1.4s ease-in-out 3; }
+    @keyframes beat {
+      0%, 100% { transform: scale(1); }
+      30%      { transform: scale(1.04); }
+      60%      { transform: scale(1.01); }
+    }
+ 
+    /* ---------- One tile ---------- */
+    .tile {
+      position: relative;      /* so the faces inside can be positioned against it */
+      margin: 3px;             /* this margin IS the gap between tiles */
+      padding: 0;
+      border: 0;
+      background: none;
+      cursor: pointer;
+    }
+ 
+    /* Each tile has two faces stacked on top of each other: the padlock (front)
+       and the photo (back). backface-visibility:hidden hides a face when it is
+       rotated away from you, which creates the card-flip effect. */
+    .face {
+      position: absolute;
+      inset: 0;                         /* shorthand for top/right/bottom/left: 0 */
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      overflow: hidden;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;   /* Safari */
+      transition: transform .8s cubic-bezier(.3, .7, .2, 1);
+    }
+    .front {
+      color: var(--brass);
+      background: repeating-linear-gradient(45deg,
+                    var(--blush-deep) 0 9px, var(--blush-shadow) 9px 18px);
+      transform: perspective(700px) rotateY(0deg);
+    }
+    .front svg { width: 38%; height: auto; }
+    .back {
+      background: var(--berry);
+      color: var(--blush);
+      font-size: .65rem;
+      padding: .25rem;
+      word-break: break-all;             /* used by the "image missing" message */
+      transform: perspective(700px) rotateY(180deg);   /* starts turned away */
+    }
+    .back img { width: 100%; height: 100%; object-fit: cover; display: block; }
+ 
+    /* When JS adds the class "unlocked", the faces swap places. */
+    .tile.unlocked .front { transform: perspective(700px) rotateY(-180deg); }
+    .tile.unlocked .back  { transform: perspective(700px) rotateY(0deg); }
+ 
+    .tile:not(.unlocked):hover .front { filter: brightness(1.06); }
+ 
+    .finale {
+      max-width: 30rem;
+      margin: 1rem auto 0;
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      line-height: 1.35;
+    }
+    .reset { margin-top: 3rem; font-size: .85rem; }
+ 
+    /* =====================================================================
+       4. THE POP-UP  (<dialog>)
+       <dialog> is a built-in HTML element. dialog.showModal() opens it with a
+       dimmed backdrop, traps keyboard focus, and closes on the Esc key.
+       ===================================================================== */
+    dialog {
+      width: min(92vw, 30rem);
+      max-height: 92vh;
+      padding: 0;                       /* padding lives on .dialog-body instead, so   */
+      border: 0;                        /* clicks on the dark backdrop can be detected */
+      border-radius: 10px;
+      background: var(--blush);
+      color: var(--berry);
+      overflow: auto;
+    }
+    dialog::backdrop { background: rgba(43, 13, 30, .65); }
+ 
+    .dialog-body { position: relative; padding: 2.25rem 1.75rem 1.75rem; }
+    .close {
+      position: absolute; top: .4rem; right: .6rem;
+      border: 0; background: none;
+      color: var(--soft);
+      font-size: 1.8rem; line-height: 1;
+      cursor: pointer;
+    }
+    #dlg-question { font-size: 1.6rem; margin-bottom: 1.25rem; }
+    #hint-text { color: var(--soft); font-style: italic; margin: 0 0 1rem; }
+ 
+    #answer-input {
+      width: 100%;
+      padding: .65rem .8rem;
+      border: 2px solid var(--berry);
+      border-radius: 4px;
+      background: #fff8f7;
+      color: inherit;
+      font: 1.2rem var(--font-body);
+    }
+ 
+    #choices { display: grid; gap: .6rem; }
+    .choice {
+      padding: .7rem .9rem;
+      border: 2px solid var(--berry);
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      font: 1.05rem var(--font-body);
+      text-align: left;
+      cursor: pointer;
+    }
+    .choice:hover { background: var(--blush-deep); }
+ 
+    .actions { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
+ 
+    #reveal img { width: 100%; border-radius: 6px; display: block; }
+    #reveal-caption { margin: 1rem 0 0; font-family: var(--font-display); font-size: 1.25rem; }
+    #reveal-missing { color: var(--rose); font-weight: 600; }
+ 
+    /* Wrong-answer wiggle. JS adds/removes this class. */
+    .shake { animation: shake .4s; }
+    @keyframes shake {
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+ 
+    /* Respect people who ask their device for less motion */
+    @media (prefers-reduced-motion: reduce) {
+      .face { transition: none; }
+      .heart.complete, .shake { animation: none; }
+    }
+  </style>
+</head>
+ 
+<body>
+  <main>
+ 
+    <!-- ================= SCREEN 1: HOME ================= -->
+    <section id="home" class="screen">
+      <h1>You Make Me</h1>
+      <p>There's some funny moments behind little puzzles</p>
+      <p>You know what my password is right...</p>
+ 
+      <!-- novalidate = "don't show the browser's default error bubbles; I'll do my own" -->
+      <form id="code-form" novalidate>
+        <label for="code-input">Six-digit code</label>
+        <!-- type="text" + inputmode="numeric" gives phones a number keypad
+             WITHOUT the problems of type="number" (which drops leading zeros,
+             so "012345" would become "12345"). -->
+        <input id="code-input" type="text" inputmode="numeric" maxlength="6"
+               autocomplete="off" aria-describedby="code-msg">
+        <p id="code-msg" class="msg" role="alert"></p>
+        <button class="btn" type="submit">Unlock</button>
+      </form>
+    </section>
+ 
+    <!-- ================= SCREEN 2: THE HEART ================= -->
+    <!-- `hidden` = not shown until JS removes it -->
+    <section id="heart-screen" class="screen wide" hidden>
+      <h2>What da vibe</h2>
+      <p id="progress"></p>
+ 
+      <!-- Tiles get created here by JavaScript, from the PUZZLES list -->
+      <div id="heart" class="heart" role="group" aria-label="Twelve photos arranged in a heart"></div>
+ 
+      <p id="finale" class="finale" hidden></p>
+ 
+      <!-- For testing while you build. Delete this button before you send it! -->
+      <button id="reset" class="link-btn reset" type="button">Start over</button>
+    </section>
+ 
+  </main>
+ 
+  <!-- ================= THE POP-UP ================= -->
+  <dialog id="dialog">
+    <div class="dialog-body">
+      <button id="dlg-close" class="close" type="button" aria-label="Close">&times;</button>
+ 
+      <!-- View A: the question -->
+      <div id="ask">
+        <h3 id="dlg-question"></h3>
+        <p id="hint-text" hidden></p>
+ 
+        <form id="answer-form" novalidate>
+          <input id="answer-input" type="text" autocomplete="off" aria-label="Your answer">
+          <div id="choices" hidden></div>
+          <p id="answer-msg" class="msg" role="alert"></p>
+          <div class="actions">
+            <button id="check-btn" class="btn" type="submit">Check answer</button>
+            <button id="hint-btn" class="link-btn" type="button" hidden>Show a hint</button>
+          </div>
+        </form>
+      </div>
+ 
+      <!-- View B: the photo, shown after a correct answer (or when re-opening) -->
+      <div id="reveal" hidden>
+        <img id="reveal-img" alt="">
+        <p id="reveal-missing" hidden></p>
+        <p id="reveal-caption"></p>
+      </div>
+    </div>
+  </dialog>
+ 
+ 
+  <script>
+    'use strict';   // turns silent mistakes (like typos in variable names) into visible errors
+ 
+    /* =====================================================================
+       1. THE PART YOU EDIT
+       ===================================================================== */
+ 
+    // The six digits that open the door. Keep it as a STRING in quotes so a
+    // leading zero (like "012345") survives.
+    const SECRET_CODE = "092325";
+ 
+    // Shown under the heart once all 12 are unlocked.
+    const FINAL_MESSAGE = "HAPPY ONE YEAR";
+ 
+    // Bump the version number if you change the puzzles after testing, so old
+    // saved progress in your browser doesn't get mixed up with the new set.
+    const STORAGE_KEY = "heart-puzzle-v1";
+ 
+    /* One object per tile.
+         col, row  -> where the tile sits in the heart grid (col 1-10, row 1-4).
+                      Tiles are 2 columns wide, so a tile at col 3 covers cols 3-4.
+         type      -> "text" (player types an answer) or "choice" (tap an option)
+         question  -> what the player sees
+         answers   -> list of accepted answers. Case and extra spaces are ignored.
+                      For "choice", it must match one of the `choices` exactly.
+         choices   -> only for type "choice"
+         hint      -> optional
+         image     -> path to the photo, relative to this HTML file
+         caption   -> optional text under the photo
+       Everything below is SAMPLE content. Replace it with your own.          */
+    const PUZZLES = [
+      // Row 1 (cols 1, 3, then a gap for the dip of the heart, then 7, 9)
+      { col: 1, row: 1, type: "text",
+        question: "If we raced to finish a meal who would win?",
+        answers: ["Lorin", "lorin"],
+        image: "Muir.jpg", caption: "I have so many food pics eeehehheheheh" },
+ 
+      { col: 3, row: 1, type: "choice",
+        question: "What color is my room?",
+        choices: ["Beige", "White", "Green", "Blue"],
+        answers: ["Green"],
+        image: "Room.jpg", caption: "Love you hehe" },
+ 
+      { col: 7, row: 1, type: "text",
+        question: "What is the univseral donor blood type?",
+        answers: ["O-negative", "O-", "O negative", "O-Negative", "O Negative", "o-", "o-negative", "o negative", "o-Negative", "o Negative"],
+        image: "BT.jpg", caption: "You ARE smarter than a 5th grader!" },
+ 
+      { col: 9, row: 1, type: "text",
+        question: "What is my favorite number",
+        answers: ["12", "Twelve", "twelve"],
+        image: "Number.jpg", caption: "JL shoutout" },
+ 
+      // Row 2 (cols 2, 4, 6, 8: shifted half a tile)
+      { col: 2, row: 2, type: "choice",
+        question: "Which of these songs has these lyrics: But now I'm in your house, on your couch, screamin', &quotI'm alive&quot",
+        choices: ["If The Sun Burns Out Tonight: Valorant", "Leave Your Mark Pt.2: LCK Kiii Kiii", "Live My Life: Heartsteel", "Made My Night: Overwatch LE SSERAFIM"],
+        answers: ["Live My Life: Heartsteel"],
+        image: "Song.jpg", caption: "I will STEEL your HEART... heh" },
+ 
+      { col: 4, row: 2, type: "text",
+        question: "What is OUR favorite beer",
+        answers: ["Corona", "corona"],
+        image: "Beeh.jpg", caption: "Holy frat floor" },
+ 
+      { col: 6, row: 2, type: "choice",
+        question: "What did you wear at the mixer where we first slept in the same bed",
+        choices: ["White tank", "Red corset", "Black mesh sleeve", "Flannel"],
+        answers: ["Black mesh sleeve"],
+        image: "First Mixer.jpg", caption: "Proof" },
+ 
+      { col: 8, row: 2, type: "choice",
+        question: "Where did we first meet",
+        choices: ["Cox Suckers Pre", "Korean Class", "Esports", "Cox"],
+        answers: ["Esports", "Cox"],
+        image: "First.jpg", caption: "I am scared" },
+ 
+      // Row 3 (cols 3, 5, 7)
+      { col: 3, row: 3, type: "text",
+        question: "Who is the bestest boy that gets me wet and makes funny noises when running?",
+        answers: ["johnny", "Johnny", "yohnny", "Yohnny"],
+        hint: "Yog",
+        image: "Yohnny.jpg", caption: "mah boi" },
+ 
+      { col: 5, row: 3, type: "choice",
+        question: "What is the capital of Florida?",
+        choices: ["Tallahasee", "Tampa", "Tallahassee", "Daytona"],
+        answers: ["Tallahassee"],
+        image: "Tall.jpg", caption: "Beach ep" },
+ 
+      { col: 7, row: 3, type: "text",
+        question: "Who loves who more",
+        answers: ["Andy"],
+        image: "Who.jpg", caption: "<3" },
+ 
+      // Row 4 (the point at the bottom)
+      { col: 5, row: 4, type: "text",
+        question: "Where are we going to dinner?",
+        answers: ["Jak", "Jak Omakase", "Omakase", "omakase"],
+        image: "EE.jpg", caption: "me hungie for waho or ygf" }
+    ];
+ 
+ 
+    /* =====================================================================
+       2. SMALL HELPERS
+       ===================================================================== */
+ 
+    // Shortcut: $("#home") instead of document.querySelector("#home")
+    const $ = (selector) => document.querySelector(selector);
+ 
+    // Grab every element we'll need ONCE, up here, and give each a nickname.
+    const homeScreen  = $("#home");
+    const heartScreen = $("#heart-screen");
+    const codeForm    = $("#code-form");
+    const codeInput   = $("#code-input");
+    const codeMsg     = $("#code-msg");
+    const heartEl     = $("#heart");
+    const progressEl  = $("#progress");
+    const finaleEl    = $("#finale");
+    const resetBtn    = $("#reset");
+ 
+    const dialog      = $("#dialog");
+    const askView     = $("#ask");
+    const revealView  = $("#reveal");
+    const questionEl  = $("#dlg-question");
+    const hintText    = $("#hint-text");
+    const hintBtn     = $("#hint-btn");
+    const answerForm  = $("#answer-form");
+    const answerInput = $("#answer-input");
+    const choicesBox  = $("#choices");
+    const checkBtn    = $("#check-btn");
+    const answerMsg   = $("#answer-msg");
+    const revealImg   = $("#reveal-img");
+    const revealMiss  = $("#reveal-missing");
+    const revealCap   = $("#reveal-caption");
+ 
+    // Make answers comparable: "  Piano " and "piano" become the same string.
+    const normalise = (text) => text.trim().toLowerCase().replace(/\s+/g, " ");
+ 
+    // Restart a CSS animation. Removing the class and adding it back isn't
+    // enough on its own: the browser batches changes and sees "no change".
+    // Reading el.offsetWidth forces it to recalculate layout in between.
+    function playAnimation(el, className) {
+      el.classList.remove(className);
+      void el.offsetWidth;
+      el.classList.add(className);
+    }
+ 
+    // The padlock icon, as inline SVG (a tiny drawing described in text).
+    // `currentColor` means "use the CSS text colour", so CSS can recolour it.
+    const LOCK_SVG = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="5" y="11" width="14" height="9" rx="2"></rect>
+        <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+        <circle cx="12" cy="15.5" r="1" fill="currentColor"></circle>
+      </svg>`;
+ 
+ 
+    /* =====================================================================
+       3. SAVED PROGRESS  (localStorage)
+       localStorage is a small key/value store inside the browser. It keeps
+       data after the tab closes, so a refresh doesn't wipe the player's
+       progress. It only stores text, so we convert with JSON.
+       try/catch protects us if storage is blocked (some privacy modes).
+       ===================================================================== */
+    function loadState() {
+      const fresh = { entered: false, unlocked: [] };
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (saved && Array.isArray(saved.unlocked)) return saved;
+      } catch (err) { /* nothing saved yet, or storage unavailable */ }
+      return fresh;
+    }
+ 
+    function saveState() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+      catch (err) { /* ignore: the page still works, it just won't remember */ }
+    }
+ 
+    let state = loadState();   // { entered: true/false, unlocked: [0, 3, 7, ...] }
+ 
+ 
+    /* =====================================================================
+       4. SWITCHING SCREENS
+       ===================================================================== */
+    function showScreen(name) {
+      homeScreen.hidden  = (name !== "home");
+      heartScreen.hidden = (name !== "heart");
+      window.scrollTo(0, 0);
+    }
+ 
+ 
+    /* =====================================================================
+       5. HOME: CHECK THE 6-DIGIT CODE
+       ===================================================================== */
+ 
+    // Every time the player types, strip out anything that isn't 0-9.
+    // /\D/g is a "regular expression": \D = any non-digit, g = all of them.
+    codeInput.addEventListener("input", () => {
+      codeInput.value = codeInput.value.replace(/\D/g, "");
+    });
+ 
+    // "submit" fires on button click OR pressing Enter inside the form.
+    codeForm.addEventListener("submit", (event) => {
+      event.preventDefault();   // stop the browser from reloading the page
+      const attempt = codeInput.value;
+ 
+      if (attempt.length !== 6) {
+        codeMsg.textContent = "The code has six digits.";
+        playAnimation(codeInput, "shake");
+        return;
+      }
+      if (attempt !== SECRET_CODE) {
+        codeMsg.textContent = "That's not the code. Try again.";
+        playAnimation(codeInput, "shake");
+        codeInput.select();
+        return;
+      }
+ 
+      // Correct!
+      codeMsg.textContent = "";
+      state.entered = true;
+      saveState();
+      showScreen("heart");
+    });
+ 
+ 
+    /* =====================================================================
+       6. BUILDING THE HEART
+       We loop over PUZZLES and create one <button> per entry, so the HTML
+       doesn't need twelve copy-pasted blocks.
+       ===================================================================== */
+    const tiles = [];   // remember each tile so we can update it later
+ 
+    function buildHeart() {
+      PUZZLES.forEach((puzzle, i) => {
+        const tile = document.createElement("button");
+        tile.type = "button";
+        tile.className = "tile";
+ 
+        // Position in the grid: "3 / span 2" = start at column 3, cover 2 columns
+        tile.style.gridColumn = `${puzzle.col} / span 2`;
+        tile.style.gridRow = puzzle.row;
+ 
+        // Front face: the padlock
+        const front = document.createElement("span");
+        front.className = "face front";
+        front.innerHTML = LOCK_SVG;
+ 
+        // Back face: the photo
+        const back = document.createElement("span");
+        back.className = "face back";
+        const img = new Image();
+        img.alt = puzzle.caption || `Photo ${i + 1}`;
+        img.src = puzzle.image;
+        // If the file can't be found, show its expected path instead so
+        // you can spot a typo in a filename straight away.
+        img.addEventListener("error", () => { back.textContent = puzzle.image; });
+        back.append(img);
+ 
+        tile.append(front, back);
+        tile.addEventListener("click", () => openPuzzle(i));
+ 
+        heartEl.append(tile);
+        tiles.push(tile);
+        refreshTile(i);
+      });
+      refreshProgress();
+    }
+ 
+    // Make one tile match the saved state (locked or unlocked).
+    function refreshTile(i) {
+      const isUnlocked = state.unlocked.includes(i);
+      tiles[i].classList.toggle("unlocked", isUnlocked);
+      tiles[i].setAttribute("aria-label", isUnlocked
+        ? `Photo ${i + 1}, unlocked. Click to view.`
+        : `Photo ${i + 1}, locked. Click to solve its puzzle.`);
+    }
+ 
+    // Update the "3 of 12" text and the ending message.
+    function refreshProgress() {
+      const done = state.unlocked.length;
+      const total = PUZZLES.length;
+      progressEl.textContent = `${done} of ${total} unlocked`;
+ 
+      const allDone = (done >= total);
+      finaleEl.textContent = FINAL_MESSAGE;
+      finaleEl.hidden = !allDone;
+      heartEl.classList.toggle("complete", allDone);
+    }
+ 
+ 
+    /* =====================================================================
+       7. THE PUZZLE POP-UP
+       ===================================================================== */
+    let currentIndex = null;    // which puzzle is open right now
+    let justUnlocked = null;    // set when solved, so the tile flips AFTER the pop-up closes
+ 
+    function openPuzzle(i) {
+      currentIndex = i;
+      if (state.unlocked.includes(i)) showReveal(i);
+      else showQuestion(i);
+      dialog.showModal();
+ 
+      // Put the cursor in the answer box (after the dialog is open)
+      if (!askView.hidden && PUZZLES[i].type !== "choice") answerInput.focus();
+    }
+ 
+    function showQuestion(i) {
+      const puzzle = PUZZLES[i];
+      const isChoice = (puzzle.type === "choice");
+ 
+      askView.hidden = false;
+      revealView.hidden = true;
+      questionEl.textContent = puzzle.question;
+      answerMsg.textContent = "";
+      answerInput.value = "";
+ 
+      // Hint: only offer the button if this puzzle has one
+      hintText.hidden = true;
+      hintText.textContent = puzzle.hint || "";
+      hintBtn.hidden = !puzzle.hint;
+ 
+      // Show either the text box or the option buttons, not both
+      answerInput.hidden = isChoice;
+      checkBtn.hidden = isChoice;
+      choicesBox.hidden = !isChoice;
+      choicesBox.replaceChildren();   // empty it before refilling
+ 
+      if (isChoice) {
+        puzzle.choices.forEach((option) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "choice";
+          b.textContent = option;
+          b.addEventListener("click", () => checkAnswer(option));
+          choicesBox.append(b);
+        });
+      }
+    }
+ 
+    function showReveal(i) {
+      const puzzle = PUZZLES[i];
+      askView.hidden = true;
+      revealView.hidden = false;
+ 
+      revealMiss.hidden = true;
+      revealImg.hidden = false;
+      revealImg.alt = puzzle.caption || `Photo ${i + 1}`;
+      revealImg.onerror = () => {
+        revealImg.hidden = true;
+        revealMiss.hidden = false;
+        revealMiss.textContent = `Image not found: ${puzzle.image}`;
+      };
+      revealImg.src = puzzle.image;
+ 
+      revealCap.textContent = puzzle.caption || "";
+      revealCap.hidden = !puzzle.caption;
+    }
+ 
+    function checkAnswer(given) {
+      const puzzle = PUZZLES[currentIndex];
+      const correct = puzzle.answers.some((a) => normalise(a) === normalise(given));
+ 
+      if (correct) {
+        if (!state.unlocked.includes(currentIndex)) {
+          state.unlocked.push(currentIndex);
+          saveState();
+        }
+        justUnlocked = currentIndex;
+        showReveal(currentIndex);
+      } else {
+        answerMsg.textContent = "Not quite. Try again.";
+        playAnimation(askView, "shake");
+        if (puzzle.type !== "choice") answerInput.select();
+      }
+    }
+ 
+    // Typed answers: submit event (button click or Enter key)
+    answerForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (answerInput.value.trim() === "") return;
+      checkAnswer(answerInput.value);
+    });
+ 
+    hintBtn.addEventListener("click", () => {
+      hintText.hidden = false;
+      hintBtn.hidden = true;
+    });
+ 
+    $("#dlg-close").addEventListener("click", () => dialog.close());
+ 
+    // Clicking the dark area outside the box closes it. Clicks on the
+    // backdrop count as clicks on the <dialog> itself; clicks on the content
+    // land on .dialog-body or its children, so event.target tells them apart.
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+ 
+    // "close" fires however the dialog closed (X, backdrop, Esc key).
+    // NOW we flip the tile so the player actually sees it happen.
+    dialog.addEventListener("close", () => {
+      if (justUnlocked !== null) {
+        const i = justUnlocked;
+        justUnlocked = null;
+        setTimeout(() => { refreshTile(i); refreshProgress(); }, 250);
+      }
+    });
+ 
+ 
+    /* =====================================================================
+       8. START OVER (testing helper)
+       ===================================================================== */
+    resetBtn.addEventListener("click", () => {
+      if (!confirm("Clear all progress and go back to the start?")) return;
+      try { localStorage.removeItem(STORAGE_KEY); } catch (err) {}
+      location.reload();
+    });
+ 
+ 
+    /* =====================================================================
+       9. START THE PAGE
+       ===================================================================== */
+    buildHeart();
+    showScreen(state.entered ? "heart" : "home");
+  </script>
+</body>
+</html>
